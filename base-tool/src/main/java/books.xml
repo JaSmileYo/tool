@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bookstore>
+	<book id="3">
+		<name>think in java</name>
+		<author name="aaa"></author>
+		<year>20200208</year>
+		<price>100</price>
+	</book>
+</bookstore>
