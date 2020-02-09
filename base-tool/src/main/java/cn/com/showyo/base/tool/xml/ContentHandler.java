@@ -7,19 +7,19 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * <p>java类绑定的xml</p>
+ * <p>设置自定义解析xml文本节点的扩展器</p>
  * @author 游修良
- * @date 2020年2月9日 上午11:14:21
+ * @date 2020年2月9日 下午4:19:27
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
-@Target(ElementType.TYPE)
-public @interface SaxParseForType {
+@Target(ElementType.FIELD)
+public @interface ContentHandler {
 	
 	/**
-	 * <p>java类绑定的xml节点名称</p>
+	 * <p>设置自定义解析xml文本节点的扩展器</p>
 	 * @return
 	 */
-	String nodeName();
+	Class<? extends ContentHandlerInterface> handler();
 
 }

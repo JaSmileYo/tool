@@ -35,8 +35,6 @@ public class AnnotationSaxParseHanlder<T> extends DefaultHandler {
 	 */
 	private Map<String, String> nodeAttrMap = new HashMap<>();
 	
-	private Map<String, String> fieldDateFormatMap = new HashMap<>();
-	
 	//输出的java对象绑定的xml节点
 	private String returnObjBindNode;
 	
@@ -46,21 +44,54 @@ public class AnnotationSaxParseHanlder<T> extends DefaultHandler {
 	//文本节点值
 	private String content;
 	
-	private DateFormat dateFormat = DATE_FORMAT;
+	/**
+	 * <p>当前次使用的日期解析格式</p>
+	 */
+	private DateFormat dateFormat;
 	
-	private static final DateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+	/**
+	 * <p>解析xml全局默认使用的日期解析格式</p>
+	 */
+	private final DateFormat defaultDateFormat;
+	
+	private static final DateFormat DEFAULT_DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 	
 	public AnnotationSaxParseHanlder(T obj) {
 		super();
 		this.returnObj = obj;
+		this.defaultDateFormat = DEFAULT_DATE_FORMAT;
+		this.dateFormat = defaultDateFormat;
+	}
+	
+	public AnnotationSaxParseHanlder(Class objClass) throws InstantiationException, IllegalAccessException {
+		super();
+		this.returnObj = (T) objClass.newInstance();
+		this.defaultDateFormat = DEFAULT_DATE_FORMAT;
+		this.dateFormat = defaultDateFormat;
 	}
 	
 	public AnnotationSaxParseHanlder(T obj, DateHandleInterface dateHandler) {
 		super();
 		this.returnObj = obj;
 		if(dateHandler != null) {
-			this.dateFormat = dateHandler.setDateFormat();
+			//设置解析xml全局默认使用的日期解析格式
+			this.defaultDateFormat = dateHandler.setDateFormat();
+		}else {
+			this.defaultDateFormat = DEFAULT_DATE_FORMAT;
 		}
+		this.dateFormat = defaultDateFormat;
+	}
+	
+	public AnnotationSaxParseHanlder(Class objClass, DateHandleInterface dateHandler) throws InstantiationException, IllegalAccessException {
+		super();
+		this.returnObj = (T) objClass.newInstance();
+		if(dateHandler != null) {
+			//设置解析xml全局默认使用的日期解析格式
+			this.defaultDateFormat = dateHandler.setDateFormat();
+		}else {
+			this.defaultDateFormat = DEFAULT_DATE_FORMAT;
+		}
+		this.dateFormat = defaultDateFormat;
 	}
 	
 	@Override
@@ -91,9 +122,6 @@ public class AnnotationSaxParseHanlder<T> extends DefaultHandler {
 				}else {
 					bindName = fieldNodeName + ">" + fieldAttrName;
 					nodeAttrMap.put(bindName, fieldNodeName);
-				}
-				if(isNotBlankString(fieldDateFormat)) {
-					fieldDateFormatMap.put(field.getName(), fieldDateFormat);
 				}
 				covertMap.put(bindName, field.getName());
 			}
@@ -170,29 +198,101 @@ public class AnnotationSaxParseHanlder<T> extends DefaultHandler {
 	private void setFieldValue(String fieldKey, String fieldValue) throws SAXException {
 		try {
 			String field = covertMap.get(fieldKey);
-			if(fieldDateFormatMap.containsKey(field)) {
-				dateFormat = new SimpleDateFormat(fieldDateFormatMap.get(field));
+			SaxParseForField saxParseForField = returnObj.getClass().getDeclaredField(field).getAnnotation(SaxParseForField.class);
+			if(saxParseForField == null) {
+				throw new SAXException("解析字段必需SaxParseForField注解");
 			}
+			
+			String fieldDateFormat = saxParseForField.dateFormat();
+			if(isNotBlankString(fieldDateFormat)) {
+				dateFormat = new SimpleDateFormat(fieldDateFormat);
+			}
+			
 			String methodName = "set" + String.valueOf(field.charAt(0)).toUpperCase() + field.substring(1);
 			Class fieldType = returnObj.getClass().getDeclaredField(field).getType();
+			
+			ContentHandler contentHandler = returnObj.getClass().getDeclaredField(field).getAnnotation(ContentHandler.class);
+			ContentHandlerInterface textHandler = null;
+			if(contentHandler != null) {
+				textHandler = contentHandler.handler().newInstance();
+			}
+			
 			Method md = returnObj.getClass().getMethod(methodName, fieldType);
 			String value = fieldValue == null ? content : fieldValue;
-			md.invoke(returnObj, getParameterValue(fieldType, value));
-			dateFormat = DATE_FORMAT;
+//			md.invoke(returnObj, getParameterValue(fieldType, value));
+			md.invoke(returnObj, getParameterValue(fieldType, saxParseForField, value, textHandler));
+			dateFormat = defaultDateFormat;
 		} catch (Exception e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
-			dateFormat = DATE_FORMAT;
+			dateFormat = defaultDateFormat;
 			throw new SAXException(e);
 		} 
 	}
 	
 	/**
 	 * <p>将得到的数据以Object类型返回</p>
+	 * @param saxParseForField 字段上的{@link SaxParseForField}注解
+	 * @param value 文本节点内容
+	 * @param textHandler 自定义文本节点解析扩展器
+	 * @return
+	 * @throws ParseException
+	 */
+	private Object getParameterValue(Class fieldClass, SaxParseForField saxParseForField,String value
+			, ContentHandlerInterface textHandler) throws ParseException{
+		String returnClass = fieldClass.getSimpleName();
+		FieldType fieldType = saxParseForField.fieldType();
+		if(textHandler != null && textHandler.shouldHandler()) {
+			return textHandler.hanlderContent(value);
+		}
+		switch (fieldType) {
+		case INT:
+			return isNotBlankString(value) ? Integer.parseInt(value) : returnClass.equals("Integer") ? null : 0;
+		case DOUBLE:
+			return isNotBlankString(value) ? Double.parseDouble(value) : returnClass.equals("Double") ? null : 0.0F;
+		case FLOAT:
+			return isNotBlankString(value) ? Float.parseFloat(value) : returnClass.equals("Float") ? null : 0.0D;
+		case SHORT:
+			return isNotBlankString(value) ? Short.parseShort(value) : returnClass.equals("Short") ? null : 0;
+		case LONG:
+			return isNotBlankString(value) ? Long.parseLong(value) : returnClass.equals("Long") ? null : 0L;
+		case CHAR:
+			return isNotBlankString(value) ? value.charAt(0) : returnClass.equals("Character") ? null : "";
+		case BYTE:
+			return isNotBlankString(value) ? Byte.parseByte(value) : returnClass.equals("Byte") ? null : 0;
+		case BOOLEAN:
+			return isNotBlankString(value) ? Boolean.parseBoolean(value) : returnClass.equals("Boolean") ? null : false;
+		case DATE:
+			return isNotBlankString(value) ? dateFormat.parse(value) : null;
+		case STRING:
+			return isNotBlankString(value) ? value : null;
+		case OBJECT:
+			Class innerType = saxParseForField.innerType();
+			if(innerType != Object.class) {
+				throw new ParseException("文本节点解析为"+innerType.getName()+"请使用自定义文本节点解析扩展器ContentHandlerInterface实现",0);
+//				return innerType.cast(value);
+			}
+			return isNotBlankString(value) ? value : null;
+		case ARRAY:
+			throw new ParseException("文本节点解析为数组请使用自定义文本节点解析扩展器ContentHandlerInterface实现",0);
+//			return isNotBlankString(value) ? value : null;
+		case ARRAYLIST:
+			throw new ParseException("文本节点解析为集合请使用自定义文本节点解析扩展器ContentHandlerInterface实现",0);
+//			return isNotBlankString(value) ? value : null;
+
+		default:
+			return null;
+		}
+	}
+	
+	
+	/**
+	 * <p>将得到的数据以Object类型返回</p>
 	 * @return
 	 * @throws ParseException 
 	 */
-	public Object getParameterValue(Class cls,String value) throws ParseException{
+	@Deprecated
+	private Object getParameterValue(Class cls,String value) throws ParseException{
 		String returnClass = cls.getSimpleName();
 		if(returnClass.equals("int")||returnClass.equals("Integer")){
 			if(isNotBlankString(value)){

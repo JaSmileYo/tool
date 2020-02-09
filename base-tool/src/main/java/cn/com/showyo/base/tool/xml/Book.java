@@ -4,19 +4,25 @@ import java.util.Date;
 
 /**
  * 
- * @author youx_xl
+ * @author you_xl
  */
 @SaxParseForType(nodeName = "bookstore")
 public class Book {
-	@SaxParseForField(nodeName = "book", attrName = "id")
+	
+	@SaxParseForField(nodeName = "book", attrName = "id", fieldType = FieldType.LONG)
 	private Long id;
-	@SaxParseForField(nodeName = "name")
+	
+	@SaxParseForField(nodeName = "name", fieldType = FieldType.STRING)
 	private String name;
-	@SaxParseForField(nodeName = "author", attrName = "name")
+	
+	@SaxParseForField(nodeName = "author", attrName = "name", fieldType = FieldType.STRING)
 	private String author;
-	@SaxParseForField(nodeName = "year", dateFormat = "yyyyMMdd")
+	
+	@ContentHandler(handler = TestContentHandler.class)
+	@SaxParseForField(nodeName = "year", dateFormat = "yyyyMMdd", fieldType = FieldType.DATE)
 	private Date year;
-	@SaxParseForField(nodeName = "price")
+	
+	@SaxParseForField(nodeName = "price", fieldType = FieldType.DOUBLE)
 	private double price;
 	
 	/**
